@@ -2,7 +2,7 @@ import math
 
 from readers import read_relevance, read_queries
 from search import search_query
-from search import tfidf_cal
+
 
 query_document_relevance = {}
 ideal_ndcg = {}
@@ -50,27 +50,15 @@ def calculate_dcg(query, documents):
 if __name__ == '__main__':
     ideal_ndcg_queries()
     sum = 0.0
-    res = {}
     all_queries = [query for query in read_queries() if query['query number'] != 0]
-
     for query in all_queries:
-       #documents= search_query(query)   # documents = search_query(query)
-        document = tfidf_cal(query,)
-
-
-       assert len(documents)==len(set(documents)), "Search results should not have duplicates:"+str(documents)
-       if len(documents) > 0:
-            print( "Query:{} and Results:{}".format(query, documents))
+        documents = search_query(query)
+        assert len(documents)==len(set(documents)), "Search results should not have duplicates:"+str(documents)
+        if len(documents) > 0:
+            print ("Query:{} and Results:{}".format(query, documents))
             dcg = calculate_dcg(query, documents)
             idcg = ideal_ndcg[str(query['query number'])]
             ndcg = dcg / idcg
             print ("dcg={}, ideal={}, ndcg={}".format(dcg, idcg, ndcg))
             sum = sum + ndcg
-            if (ndcg < 0.1):
-                res.update({query['query']: ndcg})
-    sr = sorted(res, key=res.get)
-    print("Lowest Performing Queries:")
-    for i in range(len(sr)):
-        print("{}: - {}".format(sr[i], res[sr[1]]))
-    print("{} queries under .1".format(len(sr)))
     print ("Final ncdg for all queries is {}".format(sum / len(all_queries)))

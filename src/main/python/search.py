@@ -4,12 +4,13 @@ from nltk.corpus import stopwords
 import math
 import nltk
 import operator
-
+from collections import Counter
+from string import punctuation
 
 inverted_index = {}
 unique_inverted_index = {}
-#token_dict = {}
 ps = nltk.stem.porter.PorterStemmer()   #nltk potter stemming
+cnt = Counter()
 
 
 def remove_not_indexed_toknes(tokens):
@@ -45,20 +46,21 @@ def merge_postings(indexed_tokens):
 
 
 def search_query(query):
-    tokens = tokenize(str(query['query']))
-    indexed_tokens = remove_not_indexed_toknes(tokens)
-    if len(indexed_tokens) == 0:
+    tokens = tokenize(str(query['query']))   #tokenize the search query
+    indexed_tokens = remove_not_indexed_toknes(tokens) #remove all unindexed tokens from the query (Not useful)
+    if len(indexed_tokens) == 0:  #If no tokens left  return nothing
         return []
-    elif len(indexed_tokens) == 1:
+    elif len(indexed_tokens) == 1:  #If there is one token left return the posting for that one token
         return inverted_index[indexed_tokens[0]]
-    else:
-        return merge_postings(indexed_tokens)
-        #return  tfidf_cal(query)
+    else:                                        #Otherwise here we perform TF.IDF
+        #return merge_postings(indexed_tokens)
+        return tfidf_cal(tokens)
 
 
 def tokenize(text):
     text = text.split(" ")
-    filtered = [w for w in text if not w in stopwords.words('english')]#Remove Stop Words
+    stop_words = stopwords.words('english') + list(punctuation)
+    filtered = [w for w in text if not w in stop_words]  # stopwords.words('english')]#Remove Stop Words
     token_list =[]
     for token in filtered:  # nltk potter stemming
         token = ps.stem(token)
@@ -67,16 +69,23 @@ def tokenize(text):
 
 
 def add_token_to_index(token, doc_id):
+
     if token in inverted_index:
         current_postings = inverted_index[token]
         current_postings.append(doc_id)
         inverted_index[token] = current_postings
     else:
         inverted_index[token] = [doc_id]
+    cnt[token] +=1
+    global docsize
+    docsize= sum(cnt.values())
+    return docsize
+
+
 
 
 def add_to_index(document):
-    for token in tokenize(document['title']): # tokenize(document['title']):
+    for token in tokenize(document['title']):
         add_token_to_index(token, document['id'])
 
 
@@ -86,84 +95,48 @@ def create_index():
     print( "Created index with size {}".format(len(inverted_index)))
 
 
+
 def unique_invertedindex(inverted_index):
-    for k, i in inverted_index.items():
-        unique_inverted_index[k] = (list(set(i)))
+    for key, value in inverted_index.items():
+        unique_inverted_index[key] = (list(set(value)))
     return unique_inverted_index
 
 
-def doc_size(document):
-    document_id =[]
-    for doc in document:
-        document_id.append(doc['id'])
-    return max(document_id)
-
-
-def token_terms(unique_inverted_index ):
-    token = []
-    for k,i in unique_inverted_index.items():
-        token.append(k)
-    return token
-
-
-def doc_freq(unique_inverted_index, token):
+def term_freq(token, unique_inverted_index):
     if token in unique_inverted_index:
-        return len(unique_inverted_index[token])
+        unique_inverted_index[token] = unique_inverted_index[token]+1
+    else:
+        unique_inverted_index[token] =1
+    return unique_inverted_index
 
 
-def idf(token,document,unique_inverted_index):
-    idf_cal = math.log(doc_size(document)/doc_freq(unique_inverted_index,token))
-    return idf_cal
+def idf(token,unique_inverted_index):
+    if token in unique_inverted_index.items():
+        doc_freq_size = len(unique_inverted_index[token])
+        if doc_freq_size != 0:
+            idf_cal = (1 + math.log(docsize / doc_freq_size))
+            return idf_cal
+        else:
+            return 0
 
 
-def tf_weight(token, document_id):
-    tfweight = {}
 
-    for k, i in inverted_index.items():
-        if token in k:
-            tfreq = i.count(document_id)
-            if tfreq == 0:
-                tfweight[token] =0
-            else:
-                tfweight[token] = 1 +math.log(tfreq)
-                return tfweight
+def tfidf(token):
+    tfidf = []
+    if token in unique_inverted_index.items():
+         tfidf = (term_freq(token,unique_inverted_index) *idf(token, unique_inverted_index))
+    return tfidf
 
 
-def tfidf(token, document_id,document):
-    tfidf = {}
-    for t in token:
-        if t in inverted_index:
-            tfweight = (tf_weight(t,document_id))
-            for k,i in tfweight.items():
-                tfidf[k] = (i *idf(t,document, unique_inverted_index))
-            return tfidf
-
-
-def getquery(all_queries,qnum):
-    for q in all_queries:
-        if q['query number'] == qnum:
-            return (q['query'])
-
-
-def query_tokenize(query):
-    query = query.split(" ")
-    return  query
-    #return (tokenize(query))
-
-
-def tfidf_cal(all_queries,qnum):
-    query_token = []
+def tfidf_cal(query):
     tfidf_token = {}
     score = {}
     tfidf_score = {}
-    document = read_documents()
-    query = getquery(all_queries,qnum)
-    query_token.append(query_tokenize(query))
-    for d in document:
-        for token in query_token:
-            tfidf_token = (tfidf(token,d['id'],document))
+    for token in query:
+        for d in unique_inverted_index:
+            tfidf_token = tfidf(token)
             s = 0
-        for m,n in tfidf_token.items():
+        for m,n in tfidf_token:
             if n !=0:
                 s = s+ n
                 score[d['id']] = s
@@ -173,6 +146,7 @@ def tfidf_cal(all_queries,qnum):
 
 create_index()
 unique_invertedindex(inverted_index)
+
 
 if __name__ == '__main__':
     all_queries = [query for query in read_queries() if query['query number'] != 0]
